@@ -1,5 +1,3 @@
-import wvlet.airframe.surface.Surface
-
 object Main {
 
   Surface.of[TypeUtils.Wrap] // error: Missing type parameter for Option
