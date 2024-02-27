@@ -35,3 +35,6 @@ object Surface:
   import scala.quoted.*
 
   inline def of[A]: Surface                   = ${ CompileTimeSurfaceFactory.surfaceOf[A] }
+
+  inline def func[A]: Unit = ${ CompileTimeSurfaceFactory.func[A]}
+

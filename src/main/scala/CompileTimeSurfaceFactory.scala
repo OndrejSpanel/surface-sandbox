@@ -7,6 +7,16 @@ object CompileTimeSurfaceFactory:
 
   type SurfaceMatcher = PartialFunction[Type[_], Expr[Surface]]
 
+  def func[A](using tpe: Type[A], quotes: Quotes): Expr[Unit] = {
+    import quotes.*
+    import quotes.reflect.*
+
+    val f           = new CompileTimeSurfaceFactory(using quotes)
+    f.funcOf(tpe)
+
+    '{}
+  }
+
   def surfaceOf[A](using tpe: Type[A], quotes: Quotes): Expr[Surface] =
     import quotes.*
     import quotes.reflect.*
@@ -62,6 +72,20 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
 
   def surfaceOf(tpe: Type[?]): Expr[Surface] =
     surfaceOf(TypeRepr.of(using tpe))
+
+  def funcOf(tpe: Type[?]): Unit =
+    funcOf(TypeRepr.of(using tpe))
+
+  private def funcOf(t: TypeRepr): Unit =
+    //val argListList = methodArgsOf(targetType, ts.primaryConstructor)
+    val targetType = t
+    val ts = t.typeSymbol
+
+    getResolvedConstructorOf(targetType).map { cstr =>
+      val argListList = methodArgsOf(targetType, ts.primaryConstructor)
+    }
+    println(s"func $targetType")
+
 
   private var observedSurfaceCount = new AtomicInteger(0)
   private var seen                 = ListMap[TypeRepr, Int]()
@@ -259,6 +283,7 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
       if !t.typeSymbol.flags.is(Flags.Abstract) && !t.typeSymbol.flags.is(Flags.Trait)
         && Option(t.typeSymbol.primaryConstructor)
         .exists(p => p.exists && !p.flags.is(Flags.Private) && p.paramSymss.nonEmpty) =>
+      println(s"gen ${t.simplified}")
       val typeArgs = typeArgsOf(t.simplified).map(surfaceOf(_))
       val methodParams = constructorParametersOf(t)
       // val isStatic     = !t.typeSymbol.flags.is(Flags.Local)
@@ -307,7 +332,7 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
         if ts.typeMembers.isEmpty then Some(cstr)
         else
           val lookupTable = typeMappingTable(t, pc)
-          // println(s"--- ${lookupTable}")
+          println(s"--- ${lookupTable}")
           val typeArgs = pc.paramSymss.headOption.getOrElse(List.empty).map(_.tree).collect { case t: TypeDef =>
             lookupTable.getOrElse(t.name, TypeRepr.of[AnyRef])
           }
@@ -339,7 +364,7 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
               }
               Apply(prev, argExtractors.toList)
             }
-            // println(s"== ${fn.show}")
+            println(s"== ${fn.show}")
             fn.changeOwner(sym)
         )
         val expr = '{
@@ -471,7 +496,7 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
   )
 
   private def methodArgsOf(t: TypeRepr, method: Symbol): List[List[MethodArg]] =
-    // println(s"==== method args of ${fullTypeNameOf(t)}")
+    println(s"==== method args of ${fullTypeNameOf(t)}")
 
     val defaultValueMethods = t.typeSymbol.companionClass.declaredMethods.filter { m =>
       m.name.startsWith("apply$default$") || m.name.startsWith("$lessinit$greater$default$")
@@ -492,8 +517,9 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
         .map((x, i) => (x, i + 1, x.tree))
         .collect { case (s: Symbol, i: Int, v: ValDef) =>
           // E.g. case class Foo(a: String)(implicit b: Int)
-          // println(s"=== ${v.show} ${s.flags.show} ${s.flags.is(Flags.Implicit)}")
+          println(s"=== ${v.show} ${s.flags.show} ${s.flags.is(Flags.Implicit)}")
           // Substitue type param to actual types
+          println(s"v.tpt.tpe ${v.tpt.tpe}")
           val resolved: TypeRepr = v.tpt.tpe match
             case a: AppliedType =>
               val resolvedTypeArgs = a.args.map {
@@ -516,7 +542,7 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
           val defaultMethodArgGetter =
             val targetMethodName = method.name + "$default$" + i
             t.typeSymbol.declaredMethods.find { m =>
-              // println(s"=== target: ${m.name}, ${m.owner.name}")
+              println(s"=== target: ${m.name}, ${m.owner.name}")
               m.name == targetMethodName
             }
           MethodArg(v.name, resolved, defaultValueGetter, defaultMethodArgGetter, isImplicit, isRequired, isSecret)
@@ -656,6 +682,7 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
       case _                                                          => false
 
   private def clsCast(term: Term, t: TypeRepr): Term =
+    println(s"== clsCast $t")
     Select.unique(term, "asInstanceOf").appliedToType(t)
 
   private def createMethodCaller(
