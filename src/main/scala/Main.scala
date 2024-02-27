@@ -1,8 +1,8 @@
 object Main {
 
-  class Wrap(val localOpt: TypeUtils.MyOption[Int])
+  class LocalWrap(val localOpt: TypeUtils.MyOption[Int])
 
-  Surface.func[Wrap]
+  Surface.func[LocalWrap]
   Surface.func[TypeUtils.Wrap]
 
   //Surface.of[Wrap]

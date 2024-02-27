@@ -74,17 +74,28 @@ class CompileTimeSurfaceFactory[Q <: Quotes](using quotes: Q):
     surfaceOf(TypeRepr.of(using tpe))
 
   def funcOf(tpe: Type[?]): Unit =
-    funcOf(TypeRepr.of(using tpe))
-
-  private def funcOf(t: TypeRepr): Unit =
-    //val argListList = methodArgsOf(targetType, ts.primaryConstructor)
+    val t = TypeRepr.of(using tpe)
     val targetType = t
     val ts = t.typeSymbol
-
-    getResolvedConstructorOf(targetType).map { cstr =>
-      val argListList = methodArgsOf(targetType, ts.primaryConstructor)
-    }
     println(s"func $targetType")
+
+    val paramss: List[List[Symbol]] = ts.primaryConstructor.paramSymss.filter { lst =>
+      // Empty arg is allowed
+      lst.isEmpty ||
+        // Remove type params or implicit ClassTag evidences as MethodSurface can't pass type parameters
+        !lst.forall(x => x.isTypeParam || (x.flags.is(Flags.Implicit) && x.typeRef <:< TypeRepr.of[ClassTag[_]]))
+    }
+
+    paramss.map { params =>
+      params.zipWithIndex
+        .map((x, i) => (x, i + 1, x.tree))
+        .collect { case (s: Symbol, i: Int, v: ValDef) =>
+          // E.g. case class Foo(a: String)(implicit b: Int)
+          println(s"=== ${v.show} ${s.flags.show} ${s.flags.is(Flags.Implicit)}")
+          // Substitue type param to actual types
+          println(s"v.tpt.tpe ${v.tpt.tpe}")
+        }
+    }
 
 
   private var observedSurfaceCount = new AtomicInteger(0)
